@@ -1,0 +1,14 @@
+{
+  "name": "node_ipmi",
+  "version": "1.0.0",
+  "description": "ipmi tool to use in Node JS",
+  "main": "NodeIPMI.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "eralpk",
+  "license": "ISC",
+  "dependencies": {
+    "inquirer": "^9.2.0"
+  }
+}
