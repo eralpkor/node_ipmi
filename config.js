@@ -7,17 +7,18 @@
 //   target_cycle: 200,
 // };
 
-const rl = require("readline").createInterface({
+const config = require("readline").createInterface({
   input: process.stdin,
   output: process.stdout,
 });
 
-readline.question(`What's your name?`, (name) => {
-  console.log(`Hi ${name}!`);
+readline.xcc_ip(`What's your XCC ip address? `, (ip) => {
+  // console.log(`Hi ${name}!`);
+  return ip;
   readline.close();
 });
 
 // readline();
 
 // module.exports = { Config };
-module.exports = rl;
+module.exports = config;
