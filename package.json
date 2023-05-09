@@ -9,6 +9,6 @@
   "author": "eralpk",
   "license": "ISC",
   "dependencies": {
-    "inquirer": "^9.2.0"
+    "inquirer": "^8.2.5"
   }
 }

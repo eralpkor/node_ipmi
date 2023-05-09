@@ -1,8 +1,8 @@
 const exec = require("child_process").execFile;
-// const { Config } = require("./config");
+const { config } = require("./config");
 const { Commands } = require("./commands");
 const sleep = require("./helper");
-const readline = require("./config");
+const Config = require("./config");
 const ipmitool = "ipmi/ipmitool.exe";
 
 var date_ob = new Date();
@@ -18,38 +18,90 @@ var seconds = date_ob.getSeconds();
 
 var dateTime =
   year + "-" + month + "-" + day + " " + hours + ":" + minutes + ":" + seconds;
-// console.log(readline);
 
-function checkPower() {
-  exec(
-    ipmitool,
-    [
-      "-I",
-      "lanplus",
-      "-H",
-      Config.xcc_ip,
-      "-U",
-      Config.xcc_user,
-      "-P",
-      Config.xcc_pw,
-      Commands.power,
-      Commands.powerStatus,
-      // "power",
-      // "status",
-    ],
-    function (err, data, stdout, stderr) {
-      if (err) {
-        console.log(err.message);
-        return;
-      }
-      if (data) {
-        console.log("Chassis Status: " + data.toString());
-      }
-      // console.log(`stdout: ${stdout}`);
-      // console.error(`stderr: ${stderr}`);
-    }
-  );
-}
+// (async () => {
+//   try {
+//     const answer = await config();
+
+//   } catch (err) {
+//     console.log(err.message);
+//   }
+// })();
+
+(async () => {
+  try {
+    const answer = await config();
+    // console.log("answers ", answer);
+    // if (answer.xcc_ip, answ) {
+    console.log("IP address ", answer.xcc_ip);
+
+    const runTest = (answer) => {
+      exec(
+        ipmitool,
+        [
+          "-I",
+          "lanplus",
+          "-H",
+          answer.xcc_ip,
+          "-U",
+          answer.xcc_user,
+          "-P",
+          answer.target_cycle,
+          answer.xcc_pw,
+          Commands.power,
+          Commands.powerStatus,
+          // "power",
+          // "status",
+        ],
+        function (err, data, stdout, stderr) {
+          if (err) {
+            console.log(err.message);
+            return;
+          }
+          if (data) {
+            console.log("Chassis Status: " + data.toString());
+          }
+          // console.log(`stdout: ${stdout}`);
+          // console.error(`stderr: ${stderr}`);
+        }
+      );
+    };
+    // }
+    runTest(answer);
+  } catch (error) {}
+})();
+
+// function checkPower() {
+//   exec(
+//     ipmitool,
+//     [
+//       "-I",
+//       "lanplus",
+//       "-H",
+//       answer.xcc_ip,
+//       "-U",
+//       answer.xcc_user,
+//       "-P",
+//       answer.target_cycle,
+//       answer.xcc_pw,
+//       Commands.power,
+//       Commands.powerStatus,
+//       // "power",
+//       // "status",
+//     ],
+//     function (err, data, stdout, stderr) {
+//       if (err) {
+//         console.log(err.message);
+//         return;
+//       }
+//       if (data) {
+//         console.log("Chassis Status: " + data.toString());
+//       }
+//       // console.log(`stdout: ${stdout}`);
+//       // console.error(`stderr: ${stderr}`);
+//     }
+//   );
+// }
 
 async function demo() {
   for (let i = 0; i < 5; i++) {
@@ -61,5 +113,3 @@ async function demo() {
 }
 
 // demo();
-// checkPower();
-readline;
