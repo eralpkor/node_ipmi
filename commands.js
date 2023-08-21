@@ -1,4 +1,4 @@
-Commands = {
+const commands = {
   power: "power",
   coldReset: "reset",
   warmReset: "cycle",
@@ -7,4 +7,5 @@ Commands = {
   powerOn: "on",
 };
 
-module.exports = { Commands };
+// module.exports = { Commands };
+export default commands;
