@@ -1,26 +1,35 @@
 import axios from "axios";
 import https from "https";
-import sleep from "./helper.js";
+import { sleep, pingHost } from "./helper.js";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { appendFileSync } from "node:fs";
 import config from "./config.js";
 import dateTime from "./date.js";
-import commands from "./commands.js";
+// import commands from "./commands.js";
 const ipmi_path = path.dirname("C:\\node_ipmi\\ipmi\\ipmitool.exe");
 const log_path = path.dirname("C:\\node_ipmi\\logs\\test");
-import pingHost from "./test.js";
 // replace running log from the answers config file name
-const log_file = log_path + "/RunningLog_" + ".txt";
 import log from "log-to-file";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Temp variables
-const user = "USERID";
-const pass = "Passw0rd123";
-const bmcIp = "10.244.16.136";
-const cypher = "17";
-const ipmiCommand = "status";
+// Call config script to Get user input
+const testOptions = await config();
+
+// User inputs
+const user = testOptions.xccUser;
+const pass = testOptions.xccPw;
+const bmcIp = testOptions.xccIp;
+const cypher = testOptions.cypher;
+let ipmiCommand = testOptions.cycleOptions;
+const hours = testOptions.hours;
+const startOption = testOptions.startOption;
+const logFile = testOptions.log_file;
+let log_file = log_path + `/${logFile}` + ".txt";
+
+// Agent for SSL Cert
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+});
 
 // IPMI tool to execute ipmi commands
 const runIpmiTool = (answer) => {
@@ -32,29 +41,21 @@ const runIpmiTool = (answer) => {
       "-I",
       "lanplus",
       "-C",
-      // answer.chiper,
       cypher,
       "-H",
       bmcIp,
-      // answer.xcc_ip,
       "-U",
       user,
-      // answer.xcc_user,
       "-P",
-      // answer.xcc_pw,
       pass,
-      // commands.power,
-      // commands.powerStatus,
-      // answer.options,
-      "power",
-      // "status",
       answer,
+      // "power",
+      // "status",
     ],
     function (err, data, stdout, stderr) {
       if (err) {
         console.log("IPMI failed.... check your IP or connection", err.message);
         // console.error(`stderr: ${stderr}`);
-
         return;
       }
       if (data) {
@@ -66,17 +67,14 @@ const runIpmiTool = (answer) => {
   );
 };
 
-const agent = new https.Agent({
-  rejectUnauthorized: false,
-});
-
-async function systemStatus() {
+// redfish system status check
+async function systemStatus(xccIp, user, password) {
   return axios
-    .get(`https://10.244.16.136/redfish/v1/Systems/1`, {
+    .get(`https://${xccIp}/redfish/v1/Systems/1`, {
       httpsAgent: agent,
       auth: {
-        username: "USERID",
-        password: "Passw0rd123",
+        username: user,
+        password: password,
       },
     })
     .then((response) => response)
@@ -92,126 +90,184 @@ async function systemStatus() {
     });
 }
 
-const cycleCommands = ["on", "off", "cycle", "reset", "soft"];
+const cycleCommands = [
+  "power off",
+  "power on",
+  "power cycle",
+  "power reset",
+  "power soft",
+  "raw 0x3a 0x37",
+];
+const choices = ["off", "on", "cycle", "reset", "soft", "AC cycle"];
+const indexes = [];
+const commands = [];
+// get real cycle commands from user selected commands.
+function compareChoices(arr1, arr2) {
+  for (const e of arr1) {
+    if (arr2.includes(e)) {
+      indexes.push(arr1.indexOf(e));
+    }
+  }
+  for (let i = 0; i < indexes.length; i++) {
+    commands.push(cycleCommands[indexes[i]]);
+  }
+  return commands;
+}
+const ipmiCycle = compareChoices(choices, ipmiCommand);
+// AC cycle "raw 0x3a 0x37"
 let cycleCount = 0; //cycle cycleCount
 let targetCycle = 3;
 const testStartTime = new Date().getTime();
 log("Test started ", log_file);
+let index = 0;
 
+// Run cycle test
 (async () => {
-  // start loop with power cycle
+  let isPoweredOff = false;
+  let isACCycled = false;
+  console.log("Test startTime ", testStartTime);
+  log(`-------Loop ${testStartTime} ${cycleCount} -----start`, log_file);
+
+  // fix count with hours later
   while (cycleCount <= targetCycle) {
-    let index = 0;
+    let powerCommand = commands[index];
 
-    console.log("Test startTime ", testStartTime);
-    log(`-------Loop ${testStartTime} ${cycleCount} -----start`, log_file);
-    log(`SUT status ${systemStatus()} `, log_file);
-    log("[INFO] Send power off ipmi command to system.", log_file);
-    // Power off system ipmi
-    runIpmiTool("off");
-    let isPoweredOff = false;
-    let waitCount = 1;
+    log(`SUT status ${await systemStatus()} `, log_file);
 
-    while (!isPoweredOff) {
-      if (waitCount > 12) {
-        log(
-          "[Error] Wait for 5 minutes but system is NOT powered off. Script terminated.",
-          log_file
-        );
-        console.log(
-          "[Error] Wait for 5 minutes but system is NOT powered off. Script terminated."
-        );
-        return;
-      }
-      log("[INFO] Wait for 15 seconds to detect system power state.", log_file);
-      // await new Promise((resolve) => setTimeout(resolve, 15000));
+    // log("[INFO] Send power off ipmi command to system.", log_file);
+    // Check if ipmiCycle commands includes AC cycle
+    while (isACCycled) {
+      pingHost(bmcIp);
+    }
+
+    if ((await systemStatus()) === "OSBooted") {
+      runIpmiTool(powerCommand);
+      console.log(`Sleep 15 seconds --- ${powerCommand}`);
       await sleep(15000);
-      if (await systemStatus()) {
+      if (powerCommand == "raw 0x3a 0x37") {
+        isACCycled = true;
       }
     }
-    // Do cycle depending on array index (cycleCommands)
-    if ((await systemStatus()) == "OSBooted") {
-      for (const i of cycleCommands) {
-      }
+    // log(`[INFO] Sleeping 30 seconds to power down. `, log_file);
+    console.log(` Sleeping 30 seconds to ${powerCommand}. `);
+    await sleep(30000);
+    log(`SUT status ${await systemStatus()} `, log_file);
+    console.log(`Sut status ${await systemStatus()}`);
 
-      index++;
-      console.log("index number ", index);
-      // console.log("System status... ", await systemStatus());
-      log(`System status ${await systemStatus()}`, log_file);
-      console.log("Waiting 30 seconds to shut down the system...");
-      await new Promise((resolve) => setTimeout(resolve, 30000));
-      // send IPMI command to shutdown SUT, index = power command
-      runIpmiTool(cycleCommands[index]);
-      console.log("Sleep 30 secs to check system status");
-      await new Promise((resolve) => setTimeout(resolve, 30000));
-      // const await systemStatus() = await systemStatus();
-
-      // console.log("System status.. await... ", await systemStatus());
-      console.log("cycleCount ", cycleCount);
-      log(`System status...  ${await systemStatus()}`, log_file);
-      log(`Power commands ${cycleCommands[index]}`, log_file);
-      // return await systemStatus();
-    }
-    console.log("Sleeping 5 seconds...");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    await systemStatus();
-
-    // turn on the system
     if ((await systemStatus()) == "SystemPowerOff_StateUnknown") {
-      console.log(
-        "Sleeping 5 seconds to power on system...",
-        await systemStatus()
-      );
-      // sleep 5 seconds
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      runIpmiTool("on");
-    }
-    // Check status until system is fully booted in to the OS
-    // Fix loop
-    // Stop the test if system stuck on boot or something else.
-    while (
-      (await systemStatus()) !== "OSBooted"
-      // ||"SystemPowerOff_StateUnknown"
-    ) {
-      let startTime = new Date().getTime();
-      console.log("What is date? Beginning of loop ", startTime);
-
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      console.log(
-        "System status, waiting for system to boot... ",
-        await systemStatus()
-      );
-      log(`System status ${await systemStatus()}`, log_file);
-      console.log(
-        "Test been running, time: ",
-        new Date().getTime() - startTime
-      );
-      // Sleep 10 minutes, if SUT doesn't boot exit the script.
-      if (new Date().getTime() - startTime > 600000) {
-        console.log(
-          "Cannot continue to test, no response from server, waited for 10 minutes ",
-          await systemStatus()
-        );
+      isPoweredOff = true;
+    } else {
+      let waitCount = 1;
+      console.log(`Cycle count ${cycleCount}, isPoweredOff ${isPoweredOff}, `);
+      // Exit script if system is not powered off in 5 minutes
+      while (!isPoweredOff) {
+        if (waitCount > 20) {
+          log(
+            "[Error] Wait for 5 minutes but system is NOT powered off. Script terminated.",
+            log_file
+          );
+          console.log(
+            "[Error] Wait for 5 minutes but system is NOT powered off. Script terminated."
+          );
+          return;
+        }
         log(
-          `'[-----] Script terminated.', waited for 10 minutes ${await systemStatus()} `,
+          "[INFO] Wait for 15 seconds to detect system power state.",
           log_file
         );
-        // Add FFDC collection
-        console.log("Collecting FFDC data... ");
+        // await new Promise((resolve) => setTimeout(resolve, 15000));
+        await sleep(15000);
 
+        if ((await systemStatus()) == "SystemPowerOff_StateUnknown") {
+          isPoweredOff = true;
+          log("[INFO] Detect system is powered off.", log_file);
+        } else {
+          log("[INFO] Detect system is NOT powered off", log_file);
+        }
+        console.log(`Wait count ${waitCount}, isPoweredOff ${isPoweredOff}`);
+        waitCount++;
+      }
+    }
+
+    // const cycleCommands = ["on", "cycle", "reset", "soft", "off"];
+    // // Do cycle depending on array index (cycleCommands)
+    // while (new Date().getTime() - testStartTime > 600000) {
+    // Start cycle test with power on
+    // send ipmi power command
+    runIpmiTool(powerCommand);
+    await sleep(15000);
+    console.log(
+      `redFish status ${await systemStatus()}, pw command ${powerCommand}`
+    );
+
+    // wait for OS to boot to do another cycle
+    let waitCountBoot = 1;
+    let osBooted = false;
+    while (!osBooted) {
+      if (waitCountBoot > 12) {
+        log(
+          "[Error] Wait for 6 minutes but system is NOT up yet. Script terminated.",
+          log_file
+        );
+        console.log(
+          "[Error] Wait for 6 minutes but system is NOT up yet. Script terminated."
+        );
         return;
       }
-      startTime = new Date().getTime();
-      console.log("What is date? End of loop ", startTime);
-      // return await systemStatus();
+      console.log(`Waiting for system to boot. ${await systemStatus()}`);
+      log(`Waiting for system to boot. ${await systemStatus()}`, log_file);
+      await sleep(30000);
+      if ((await systemStatus()) === "OSBooted") {
+        osBooted = true;
+      }
+      waitCountBoot++;
     }
+    if (
+      powerCommand === "cycle" ||
+      powerCommand === "reset" ||
+      powerCommand === "soft"
+    ) {
+      log("[INFO] Wait for 15 seconds to detect system power state.", log_file);
+      console.log(
+        `[INFO] Wait for 15 seconds to detect system power state, continue with cycle.`
+      );
+      await sleep(15000);
+      console.log("Current system status ", await systemStatus());
+    } else if (powerCommand === "on") {
+      log("[INFO] Wait for 15 seconds to detect system power state.", log_file);
+      console.log(
+        `[INFO] Wait for 15 seconds to detect system power state, continue with cycle.`
+      );
+      await sleep(15000);
+      console.log("Current system status ", await systemStatus());
+      if ((await systemStatus()) == "OSBooted") {
+        index++;
+        return;
+      } else {
+        log(
+          "[INFO] Wait for 15 seconds to detect system power state.",
+          log_file
+        );
+        console.log(
+          `[INFO] Wait for 15 seconds to detect system power state, continue with cycle.`
+        );
+        await sleep(15000);
+        console.log("Current system status ", await systemStatus());
+      }
+    }
+    {
+    }
+    //
+    if (index === commands.length) {
+      index = 0;
+    }
+    // }
 
     cycleCount++;
     console.log(
-      "Checking system status end of while loop ",
+      "Checking system status end of the loop ",
       await systemStatus()
     );
-    // return await systemStatus();
   }
 })();
 
@@ -219,3 +275,4 @@ log("Test started ", log_file);
 // SystemRunningInUEFI
 // BootingOSOrInUndetectedOS
 // SystemPowerOff_StateUnknown
+// OSBooted
