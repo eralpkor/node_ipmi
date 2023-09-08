@@ -1,14 +1,23 @@
+import ping from "ping";
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export default sleep;
+const frequency = 5000;
 
-// async function countdown() {
-//   for (let i = 0; i < 5; i++) {
-//     console.log(`Waiting 5 seconds...`);
-//     await sleep(5 * 1000);
-//     checkPower();
-//   }
-//   console.log("Done");
-// }
+const pingHost = async (host) => {
+  // hosts.forEach(function (host) {
+  setInterval(() => {
+    ping.sys.probe(host, function (isAlive) {
+      var msg = isAlive
+        ? "host " + host + " is alive"
+        : "host " + host + " is dead";
+      console.log(isAlive);
+      return isAlive;
+    });
+  }, frequency);
+  // });
+};
+
+export { sleep, pingHost };
