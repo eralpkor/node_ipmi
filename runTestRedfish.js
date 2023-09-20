@@ -16,7 +16,7 @@ import file from "simple-node-logger";
 // create a rolling file logger based on date/time that fires process events
 const opts = {
   // logFilePath: "logs/TEST_LOG.log",
-  logFilePath: "logs/chicago.log",
+  logFilePath: "logs/chicago_1.log",
   timestampFormat: "YYYY-MM-DD HH:mm:ss",
 };
 const log = file.createSimpleLogger(opts);
@@ -83,15 +83,13 @@ const runIpmiTool = (a, b, c) => {
     function (err, data, stdout, stderr) {
       if (err) {
         console.log("IPMI failed.... check your IP or connection", err.message);
-        log.error(
-          `IPMI failed.... check your IP or connection ${data} ${err.message}`
-        );
+        log.error(`IPMI failed.... check your IP or connection ${err.message}`);
         console.error(`stderr: ${stderr}`);
         return;
       }
       if (data) {
-        log.info(`IPMI command ${data.toString()}`);
         console.log(`ipmi command ${data.toString()}`);
+        log.info(`IPMI command ${data.toString()}`);
         // console.log(`stdout: ${stdout}`);
       }
       // console.log(`stdout: ${stdout}`);
@@ -105,7 +103,7 @@ axiosRetry(client, {
   retries: 20,
   retryDelay: axiosRetry.exponentialDelay,
   onRetry: function onRetry(retryCount, error, requestConfig) {
-    console.log(error.message);
+    console.log("Error and retry count ", error, retryCount);
   },
 });
 // redfish system status check
@@ -127,7 +125,6 @@ async function systemStatus() {
       return status.data.Oem.Lenovo.SystemStatus;
     })
     .catch((error) => {
-      console.log(`failed after`);
       console.log(
         `Error, cannot reach out to the server IP: ${bmcIp} `,
         error.toJSON().message
@@ -222,6 +219,7 @@ function array_move(arr, old_index, new_index) {
       let command = ipmiCommand[index];
       if (!(await pingHost(bmcIp))) {
         isACCycled = true;
+        log.info(`System is AC cycled.`);
       }
 
       if (
@@ -229,68 +227,38 @@ function array_move(arr, old_index, new_index) {
         (await systemStatus()) == "SystemRunningInUEFI" ||
         (await systemStatus()) == "BootingOSOrInUndetectedOS"
       ) {
-        console.log("216 isSystemBusy state ", isSystemBusy, dateTime);
         isSystemBusy = true;
-        console.log("218 isSystemBusy state ", isSystemBusy);
+        log.info(`Is System Busy? ${isSystemBusy}`);
       }
-      console.log(
-        "188 command and state ",
-        command,
-        await systemStatus(),
-        isSystemBusy
-      );
+
       log.info(`System is ${await systemStatus()}`);
       // check system status to run ipmitool
       let waitCount = 1;
 
-      console.log("201 isSystemBusy state ", isSystemBusy);
       // Wait until next IPMI command
       while (isSystemBusy) {
         if (waitCount > 60) {
-          console.log(
-            "Waited 20 minutes System state did not change exit loop ",
-            waitCount,
-            await systemStatus(),
-            dateTime
-          );
           log.error(
             `Waited 20 minutes System state did not change. Exiting test ${await systemStatus()}`
           );
           exit(1);
         }
 
-        console.log("Wait for 20 secs ", await systemStatus());
-        console.log(`222Wait for 20 seconds to detect system power state. `);
-        console.log("225 isSystemBusy state ", isSystemBusy, dateTime);
-
-        log.info(
-          `Wait for 20 seconds to detect system power state. ${await systemStatus()}`
-        );
+        log.info(`Wait for 20 seconds to detect system power state.`);
         await sleep(20000);
-        log.info(
-          `Waited 20 secons system power state: ${await systemStatus()}`
-        );
+        log.info(`Waited 20 seconds, system state: ${await systemStatus()}`);
         // Check redFish state, if not OS booted or powered off keep checking
         if (
           (await systemStatus()) === "OSBooted" ||
           (await systemStatus()) === "SystemPowerOff_StateUnknown"
         ) {
-          console.log("216 isSystemBusy state ", isSystemBusy, dateTime);
           isSystemBusy = false;
-          console.log("218 isSystemBusy state ", isSystemBusy);
+          log.info(`Is System Busy booting ${isSystemBusy}`);
         }
         waitCount++;
       }
-      console.log("234 isSystemBusy state ", isSystemBusy);
-      console.log(
-        "213 system status and power command ",
-        await systemStatus(),
-        ipmiCommand[index],
-        dateTime
-      );
-
       log.info(`Sleep 20 Seconds before raw power command - ${command}`);
-      log.info(`IPMI command will send "${cycleCommands[index]}"`);
+      log.info(`ipmi command for next cycle "${cycleCommands[index]}"`);
 
       await sleep(20000);
       log.info(`263 command ${command}`);
@@ -305,14 +273,12 @@ function array_move(arr, old_index, new_index) {
       await sleep(10000);
       if (a == "0x3a") {
         isACCycled = true;
-        console.log("isACCycled ", isACCycled);
+        log.info(`ipmi AC cycle command sent ${isACCycled}`);
       }
-      log.info(
-        ` Sleep 30 seconds to check if raw ipmi command kicked in. ${dateTime}`
-      );
+      log.info(` Sleep 30 seconds to check if raw ipmi command kicked in.`);
       await sleep(30000);
       isSystemBusy = true;
-      log.info("isSystemBusy is end of for loop ", isSystemBusy, dateTime);
+      log.info("isSystemBusy is end of for loop ", isSystemBusy);
       // Check ipmi power command to flag system status "OFF".
       log.info(
         "ipmi command and isPoweredOff ",
@@ -324,18 +290,12 @@ function array_move(arr, old_index, new_index) {
         let waitCount = 1;
         while (!isPoweredOff) {
           if (waitCount > 30) {
-            console.log(
-              "Waited 10 minutes but System did not power off, exit loop ",
-              waitCount,
-              await systemStatus(),
-              dateTime
-            );
             log.error(
-              `Waited 10 minutes but System did not power off, exit test. ${dateTime} `
+              `Waited 10 minutes but System did not power off, test exited. Poser status ${await systemStatus()}`
             );
             exit(1);
           }
-          log.info(`276 Sleep 20 seconds to check if system powered off.`);
+          log.info(`Sleep 20 seconds to check if system powered off.`);
           await sleep(20000);
           log.info(`System status ${await systemStatus()}`);
           if ((await systemStatus()) === "SystemPowerOff_StateUnknown") {
@@ -353,32 +313,22 @@ function array_move(arr, old_index, new_index) {
         let waitCount = 1;
         while (!osBooted) {
           if (waitCount > 30) {
-            console.log(
-              "Waited 10 minutes but System did not power on, exit loop ",
-              waitCount,
-              await systemStatus(),
-              dateTime
-            );
             log.error(
-              `Waited 10 minutes but System did not boot to OS, exit test. ${dateTime} `
+              `Waited 10 minutes but System did not boot to OS, test stopped. Try count ${waitCount}. System status ${await systemStatus()}`
             );
             exit(1);
           }
-          console.log(
-            "307 Sleep 20 seconds to check if system boot into the OS yet."
-          );
+
           log.info(
             `Sleep 20 seconds to check if system boot into the OS yet. ${await systemStatus()}`
           );
           await sleep(20000);
           if ((await systemStatus()) === "OSBooted") {
             osBooted = true;
-            console.log("OS Booted continue with cycle ", osBooted);
-            log.info(`OS Booted status ${osBooted} - ${dateTime}`);
+            log.info(`OS Booted status ${osBooted}`);
           } else {
             osBooted = false;
-            console.log("OS Did not boot yet. ", osBooted);
-            log.info(`[INFO ] OS Booted status ${osBooted} - ${dateTime}`);
+            log.info(`[INFO ] OS Booted status ${osBooted}`);
           }
           waitCount++;
         }
@@ -409,11 +359,11 @@ function array_move(arr, old_index, new_index) {
           // log.info(`BMC is down ${await systemStatus()}`);
           if (await pingHost(bmcIp)) {
             isACCycled = false;
-            log.info(`XCC is back online status ${isACCycled} - ${dateTime}`);
+            log.info(`XCC is back online status ${isACCycled}`);
             await sleep(30000);
           } else {
             isACCycled = true;
-            log.info(` XCC is not online yet. ${isACCycled} - ${dateTime}`);
+            log.info(` XCC is not online yet. ${isACCycled}`);
           }
           log.info(`wait count ${waitCount}`);
           waitCount++;
@@ -430,16 +380,19 @@ function array_move(arr, old_index, new_index) {
       new Date().getTime() - testStartTime > testRunTime
     );
     cycleCount++;
+    console.log(
+      "Test run time ",
+      new Date().getTime() - testStartTime,
+      new Date().getTime() - testStartTime > testRunTime
+    );
     if (new Date().getTime() - testStartTime > testRunTime) {
       keepCalling = false;
     }
   }
   let testEndTime = new Date().getTime();
   log.info(`Cycle test ended. ${cycleCount} cycles completed.`);
-  log.info(`************************ ${dateTime} ****************************`);
-  log.info(
-    `Test ran ${testEndTime} - ${testStartTime} ${testRunTime} milliseconds`
-  );
+  log.info(`************************ COMPLETED ****************************`);
+  log.info(`Test ran ${testEndTime - testStartTime} milliseconds`);
 })();
 
 // SystemOn_StartingUEFI
