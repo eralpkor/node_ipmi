@@ -1,7 +1,7 @@
 import axios from "axios";
 import axiosRetry from "axios-retry";
 import https from "https";
-import { sleep, pingHost } from "./helper.js";
+import { sleep, pingHost, timeStamp } from "./helper.js";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { appendFileSync } from "node:fs";
@@ -16,7 +16,7 @@ import file from "simple-node-logger";
 // create a rolling file logger based on date/time that fires process events
 const opts = {
   // logFilePath: "logs/TEST_LOG.log",
-  logFilePath: "logs/chicago_1.log",
+  logFilePath: "logs/chicago_2.log",
   timestampFormat: "YYYY-MM-DD HH:mm:ss",
 };
 const log = file.createSimpleLogger(opts);
@@ -29,7 +29,7 @@ import { exit } from "node:process";
 // const cypher = testOptions.cypher;
 // let ipmiCommand = testOptions.cycleOptions;
 // const hours = testOptions.hours;
-const hours = 1;
+const hours = 15;
 const testRunTime = hours * 3600000;
 const targetCount = 3;
 // let startOption = testOptions.startOptions;
@@ -203,9 +203,11 @@ function array_move(arr, old_index, new_index) {
   let osBooted = false;
   let isACCycled = false;
   let keepCalling = true;
-  log.info(`-------Loop ${testStartTime} ${cycleCount} ${dateTime} -----start`);
   log.info(
-    `Test started on IP ${bmcIp}, will run ${testRunTime}ms or ${hours}hr/s`
+    `*********** Cycle test start ${await timeStamp()} *********************`
+  );
+  log.info(
+    `Test started on IP ${bmcIp}, will run  ${hours}hr/s, ${testRunTime}ms.`
   );
   log.info(
     `******************************************************************`
@@ -214,9 +216,14 @@ function array_move(arr, old_index, new_index) {
   // while (cycleCount <= targetCycle) {
   while (keepCalling) {
     let isPoweredOff = false;
+    let eachCycleTime = new Date().getTime();
+
     // run all cycle commands
     for (index in ipmiCommand) {
       let command = ipmiCommand[index];
+      eachCycleTime = new Date().getTime();
+
+      log(`****** Cycle ${cycleCount} started ${eachCycleTime} ******`);
       if (!(await pingHost(bmcIp))) {
         isACCycled = true;
         log.info(`System is AC cycled.`);
@@ -261,7 +268,6 @@ function array_move(arr, old_index, new_index) {
       log.info(`ipmi command for next cycle "${cycleCommands[index]}"`);
 
       await sleep(20000);
-      log.info(`263 command ${command}`);
       let a = command[0];
       let b = command[1];
       let c = command[2];
@@ -278,13 +284,6 @@ function array_move(arr, old_index, new_index) {
       log.info(` Sleep 30 seconds to check if raw ipmi command kicked in.`);
       await sleep(30000);
       isSystemBusy = true;
-      log.info("isSystemBusy is end of for loop ", isSystemBusy);
-      // Check ipmi power command to flag system status "OFF".
-      log.info(
-        "ipmi command and isPoweredOff ",
-        ipmiCommand[index],
-        isPoweredOff
-      );
       // Check if ipmi off command turn off the system
       if (c === "0x00") {
         let waitCount = 1;
@@ -370,15 +369,18 @@ function array_move(arr, old_index, new_index) {
         }
       }
     }
-
     if (index === ipmiCommand.length) {
       index = 0;
     }
     log.info(
-      "429 cycle count LOOP, time expired? ",
-      cycleCount,
-      new Date().getTime() - testStartTime > testRunTime
+      `******************** Cycle count ${cycleCount} ***********************`
     );
+    log.info(
+      `One Power cycle took ${
+        new Date().getTime() - eachCycleTime
+      } milliseconds.`
+    );
+    eachCycleTime = new Date().getTime();
     cycleCount++;
     console.log(
       "Test run time ",
@@ -391,8 +393,13 @@ function array_move(arr, old_index, new_index) {
   }
   let testEndTime = new Date().getTime();
   log.info(`Cycle test ended. ${cycleCount} cycles completed.`);
-  log.info(`************************ COMPLETED ****************************`);
+  log.info(
+    `************************ TEST COMPLETED ****************************`
+  );
   log.info(`Test ran ${testEndTime - testStartTime} milliseconds`);
+  log.info(
+    `Test ran ${((testEndTime - testStartTime) / 3600000).toFixed(2)} hour/s.`
+  );
 })();
 
 // SystemOn_StartingUEFI
