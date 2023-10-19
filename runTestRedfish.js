@@ -4,52 +4,47 @@ import https from "https";
 import { sleep, pingHost, timeStamp } from "./helper.js";
 import { execFile } from "node:child_process";
 import path from "node:path";
-import { appendFileSync } from "node:fs";
 import config from "./config.js";
-import dateTime from "./date.js";
-// import commands from "./commands.js";
 const ipmi_path = path.dirname("C:\\node_ipmi\\ipmi\\ipmitool.exe");
 const log_path = path.dirname("C:\\node_ipmi\\logs\\test");
 import file from "simple-node-logger";
+import setup from "./setup.js";
 // Call config script to Get user input
 // const testOptions = await config();
 // create a rolling file logger based on date/time that fires process events
 const opts = {
   // logFilePath: "logs/TEST_LOG.log",
-  logFilePath: "logs/chicago_2.log",
+  logFilePath: `logs/${setup.log_file}.log`,
   timestampFormat: "YYYY-MM-DD HH:mm:ss",
 };
 const log = file.createSimpleLogger(opts);
 import { exit } from "node:process";
 
 // // User inputs
-// let user = testOptions.xccUser;
-// const pass = testOptions.xccPw;
-// const bmcIp = testOptions.xccIp;
-// const cypher = testOptions.cypher;
-// let ipmiCommand = testOptions.cycleOptions;
-// const hours = testOptions.hours;
-const hours = 15;
-const testRunTime = hours * 3600000;
+let user = setup.user;
+const pass = setup.pass;
+const bmcIp = setup.bmcIp;
+const cipher = setup.cipher;
 const targetCount = 3;
+let ipmiCommand = setup.ipmiCommand;
+const hours = setup.hours;
+const testRunTime = hours * 3600000;
+
 // let startOption = testOptions.startOptions;
 // const logFile = testOptions.log_file;
 // const log_file = log_path + `/${logFile}` + ".txt";
 // console.log(bmcIp, user, pass, cypher, hours, log_file);
 // console.log("Commands", testOptions.cycleCommands);
 ////////////////////////////////////////
-let user = "USERID";
-let pass = "Passw0rd123";
-let bmcIp = "10.244.17.23";
-let cypher = "17";
 // let ipmiCommand = ["off", "on", "cycle", "reset", "0x3a 0x37"];
-let ipmiCommand = [
-  ["0x00", "0x02", "0x00"],
-  ["0x00", "0x02", "0x01"],
-  ["0x00", "0x02", "0x02"],
-  ["0x00", "0x02", "0x03"],
-  ["0x3a", "0x37", ""],
-];
+// [
+//   ["0x00", "0x02", "0x00"],
+//   ["0x00", "0x02", "0x01"],
+//   ["0x00", "0x02", "0x02"],
+//   ["0x00", "0x02", "0x03"],
+//   // AC Cycle
+//   // ["0x3a", "0x37", ""],
+// ];
 // const logFile = "TestLog";
 // const log_file = log_path + `/${logFile}` + ".txt";
 
@@ -68,7 +63,7 @@ const runIpmiTool = (a, b, c) => {
       "-I",
       "lanplus",
       "-C",
-      cypher,
+      cipher,
       "-H",
       bmcIp,
       "-U",
@@ -103,7 +98,7 @@ axiosRetry(client, {
   retries: 20,
   retryDelay: axiosRetry.exponentialDelay,
   onRetry: function onRetry(retryCount, error, requestConfig) {
-    console.log("Error and retry count ", error, retryCount);
+    console.log("RedFish not ready yet ", error.response.status, retryCount);
   },
 });
 // redfish system status check
@@ -217,13 +212,17 @@ function array_move(arr, old_index, new_index) {
   while (keepCalling) {
     let isPoweredOff = false;
     let eachCycleTime = new Date().getTime();
+    log.info(
+      `****** Cycle ${cycleCount} started. Elapsed time ${
+        new Date().getTime() - eachCycleTime
+      } ******`
+    );
 
     // run all cycle commands
     for (index in ipmiCommand) {
       let command = ipmiCommand[index];
       eachCycleTime = new Date().getTime();
 
-      log(`****** Cycle ${cycleCount} started ${eachCycleTime} ******`);
       if (!(await pingHost(bmcIp))) {
         isACCycled = true;
         log.info(`System is AC cycled.`);
@@ -235,7 +234,7 @@ function array_move(arr, old_index, new_index) {
         (await systemStatus()) == "BootingOSOrInUndetectedOS"
       ) {
         isSystemBusy = true;
-        log.info(`Is System Busy? ${isSystemBusy}`);
+        log.info(`Is System Busy? ${isSystemBusy ? "YES" : "NO"}`);
       }
 
       log.info(`System is ${await systemStatus()}`);
@@ -334,7 +333,7 @@ function array_move(arr, old_index, new_index) {
       }
 
       log.info(
-        `Is BMC up? ${await pingHost(bmcIp)} ipmi command ${
+        `Is BMC up? ${(await pingHost(bmcIp)) ? "YES" : "NO"} ipmi command ${
           cycleCommands[index]
         }`
       );
@@ -342,9 +341,7 @@ function array_move(arr, old_index, new_index) {
       if (!(await pingHost(bmcIp))) {
         let waitCount = 1;
         isACCycled = true;
-        // if (!pingHost) {
-        //   isACCycled = true;
-        // }
+
         while (isACCycled) {
           if (waitCount > 30) {
             log.error(
@@ -372,9 +369,7 @@ function array_move(arr, old_index, new_index) {
     if (index === ipmiCommand.length) {
       index = 0;
     }
-    log.info(
-      `******************** Cycle count ${cycleCount} ***********************`
-    );
+
     log.info(
       `One Power cycle took ${
         new Date().getTime() - eachCycleTime
@@ -382,6 +377,9 @@ function array_move(arr, old_index, new_index) {
     );
     eachCycleTime = new Date().getTime();
     cycleCount++;
+    log.info(
+      `******************** Cycle count ${cycleCount} ***********************`
+    );
     console.log(
       "Test run time ",
       new Date().getTime() - testStartTime,
