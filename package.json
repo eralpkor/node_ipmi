@@ -1,7 +1,7 @@
 {
   "name": "node_ipmi",
   "version": "1.0.0",
-  "description": "ipmi power cycle tool to use in Node.JS",
+  "description": "ipmi power cycle tool to use in Windows and Node.JS",
   "main": "runTestRedfish.js",
   "type": "module",
   "scripts": {

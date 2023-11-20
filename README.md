@@ -1,14 +1,16 @@
 # Node.js ipmi script
 
+### Intelligent Platform Management Interface (IPMI)
+
 ### This script allows you to power cycle a system with ipmi commands
 
 ## Usage
 
-You need to have [node.js](https://nodejs.org/en/) and npm installed on your computer
+You need to have [node.js](https://nodejs.org/en/), ipmitool for Windows OS and npm installed on your computer
 
 npm run runTest [options] -u <username> -p <password> -i <bmc ip address> -c <cipher> -h <hours> -l <log file> --help <display help for command>
 
-``` $ node runTestRedfish.js -h
+````$ node runTestRedfish.js -h
 Usage: runTestRedfish [OPTIONS]...
 
 Options:
@@ -24,3 +26,4 @@ Options:
 ## License
 
 This project is licensed under the MIT License.
+````
