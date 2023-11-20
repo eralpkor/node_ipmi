@@ -1,52 +1,48 @@
+#!/usr/bin/env node
 import axios from "axios";
 import axiosRetry from "axios-retry";
 import https from "https";
 import { sleep, pingHost, timeStamp } from "./helper.js";
 import { execFile } from "node:child_process";
 import path from "node:path";
-import config from "./config.js";
 const ipmi_path = path.dirname("C:\\node_ipmi\\ipmi\\ipmitool.exe");
 const log_path = path.dirname("C:\\node_ipmi\\logs\\test");
 import file from "simple-node-logger";
 import setup from "./setup.js";
-// Call config script to Get user input
-// const testOptions = await config();
+import { Command } from "commander";
+import { exit } from "node:process";
+const program = new Command();
 // create a rolling file logger based on date/time that fires process events
+program
+  .version("1.0.0", "-v, --version")
+  .usage("[OPTIONS]...")
+  .requiredOption("-u, --user <USERID>", "BMC user name")
+  .requiredOption("-p, --password <Passw0rd>", "BMC password")
+  .requiredOption("-i, --ip <IP ADDRESS>", "BMC ip address")
+  .requiredOption("-c, --cipher <CIPHER>", "cipher number, eg. 17")
+  .requiredOption("-t, --time <HOURS>", "hours for test to run")
+  .requiredOption("-l, --log <LOG_FILE_NAME>", "name of the log file")
+  .action((file, options) => {
+    console.log("options: ", file);
+  })
+  .parse(process.argv);
+
+const options = program.opts();
+
 const opts = {
-  // logFilePath: "logs/TEST_LOG.log",
-  logFilePath: `logs/${setup.log_file}.log`,
+  logFilePath: `logs/${options.log}.log`,
   timestampFormat: "YYYY-MM-DD HH:mm:ss",
 };
 const log = file.createSimpleLogger(opts);
-import { exit } from "node:process";
 
-// // User inputs
-let user = setup.user;
-const pass = setup.pass;
-const bmcIp = setup.bmcIp;
-const cipher = setup.cipher;
-const targetCount = 3;
-let ipmiCommand = setup.ipmiCommand;
-const hours = setup.hours;
+// User inputs variables
+const user = options.user;
+const pass = options.password;
+const bmcIp = options.ip;
+const cipher = options.cipher;
+const hours = options.time;
 const testRunTime = hours * 3600000;
-
-// let startOption = testOptions.startOptions;
-// const logFile = testOptions.log_file;
-// const log_file = log_path + `/${logFile}` + ".txt";
-// console.log(bmcIp, user, pass, cypher, hours, log_file);
-// console.log("Commands", testOptions.cycleCommands);
-////////////////////////////////////////
-// let ipmiCommand = ["off", "on", "cycle", "reset", "0x3a 0x37"];
-// [
-//   ["0x00", "0x02", "0x00"],
-//   ["0x00", "0x02", "0x01"],
-//   ["0x00", "0x02", "0x02"],
-//   ["0x00", "0x02", "0x03"],
-//   // AC Cycle
-//   // ["0x3a", "0x37", ""],
-// ];
-// const logFile = "TestLog";
-// const log_file = log_path + `/${logFile}` + ".txt";
+let ipmiCommand = setup.ipmiCommand;
 
 // Agent for SSL Cert
 const agent = new https.Agent({
@@ -56,9 +52,7 @@ const agent = new https.Agent({
 // IPMI tool to execute ipmi commands
 const runIpmiTool = (a, b, c) => {
   execFile(
-    // "C:/node_ipmi/ipmi/ipmitool.exe",
     `${ipmi_path}\\ipmitool.exe`,
-    // -I lanplus -C 17 -H 10.244.17.29 -U USERID -P Passw0rd123 power status",
     [
       "-I",
       "lanplus",
@@ -85,9 +79,7 @@ const runIpmiTool = (a, b, c) => {
       if (data) {
         console.log(`ipmi command ${data.toString()}`);
         log.info(`IPMI command ${data.toString()}`);
-        // console.log(`stdout: ${stdout}`);
       }
-      // console.log(`stdout: ${stdout}`);
     }
   );
 };
@@ -225,7 +217,7 @@ function array_move(arr, old_index, new_index) {
 
       if (!(await pingHost(bmcIp))) {
         isACCycled = true;
-        log.info(`System is AC cycled.`);
+        log.info(`State: AC cycled.`);
       }
 
       if (
@@ -237,7 +229,7 @@ function array_move(arr, old_index, new_index) {
         log.info(`Is System Busy? ${isSystemBusy ? "YES" : "NO"}`);
       }
 
-      log.info(`System is ${await systemStatus()}`);
+      log.info(`State: ${await systemStatus()}`);
       // check system status to run ipmitool
       let waitCount = 1;
 
@@ -399,6 +391,7 @@ function array_move(arr, old_index, new_index) {
     `Test ran ${((testEndTime - testStartTime) / 3600000).toFixed(2)} hour/s.`
   );
 })();
+// EOF
 
 // SystemOn_StartingUEFI
 // SystemRunningInUEFI
