@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "user": "node user.js",
-    "runTest": "node runTestRedfish.js",
+    "run": "node powerCycle.js",
     "hello": "echo \"Hello world\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
