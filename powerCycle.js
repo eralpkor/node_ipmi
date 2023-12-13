@@ -43,7 +43,8 @@ const cipher = options.cipher;
 const hours = options.time;
 const testRunTime = hours * 3600000;
 let ipmiCommand = setup.ipmiCommand;
-
+// API
+const restApi = `https://${bmcIp}/redfish/v1/Systems/1`;
 // Agent for SSL Cert
 const agent = new https.Agent({
   rejectUnauthorized: false,
@@ -85,7 +86,12 @@ const runIpmiTool = (a, b, c) => {
 };
 
 // use axios-retry
-const client = axios.create();
+const client = axios.create({
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false,
+  }),
+});
+
 axiosRetry(client, {
   retries: 20,
   retryDelay: axiosRetry.exponentialDelay,
@@ -96,7 +102,7 @@ axiosRetry(client, {
 // redfish system status check
 async function systemStatus() {
   return client
-    .get(`https://${bmcIp}/redfish/v1/Systems/1`, {
+    .get(restApi, {
       timeout: 600000,
       retryDelay: axiosRetry.exponentialDelay,
       retryCount: 20,
@@ -135,23 +141,23 @@ async function systemStatus() {
     });
 }
 
-const cycleCommands = [
-  "power off",
-  // [["raw"], ["0x00"], ["0x02"], ["0x00"]],
-  // "raw 0x00 0x02 0x00",
-  "power on", //
-  // "raw 0x00 0x02 0x01",
-  "power cycle", // raw 0x3a 0x37 //
-  // "raw 0x00 0x02 0x02",
-  "power reset", //
-  // "raw 0x00 0x02 0x03",
-  "AC cycle",
-  // "raw 0x3a 0x37",
-];
+// const cycleCommands = [
+//   "power off",
+//   // [["raw"], ["0x00"], ["0x02"], ["0x00"]],
+//   // "raw 0x00 0x02 0x00",
+//   "power on", //
+//   // "raw 0x00 0x02 0x01",
+//   "power cycle", // raw 0x3a 0x37 //
+//   // "raw 0x00 0x02 0x02",
+//   "power reset", //
+//   // "raw 0x00 0x02 0x03",
+//   "AC cycle",
+//   // "raw 0x3a 0x37",
+// ];
 
-const choices = ["off", "on", "cycle", "reset", "AC cycle"];
-const indexes = [];
-const commands = [];
+// const choices = ["off", "on", "cycle", "reset", "AC cycle"];
+// const indexes = [];
+// const commands = [];
 // get real cycle commands from user selected commands.
 // function compareChoices(arr1, arr2) {
 //   for (const e of arr1) {
@@ -190,6 +196,7 @@ function array_move(arr, old_index, new_index) {
   let osBooted = false;
   let isACCycled = false;
   let keepCalling = true;
+
   log.info(
     `*********** Cycle test start ${await timeStamp()} *********************`
   );
@@ -256,17 +263,18 @@ function array_move(arr, old_index, new_index) {
         waitCount++;
       }
       log.info(`Sleep 20 Seconds before raw power command - ${command}`);
-      log.info(`ipmi command for next cycle "${cycleCommands[index]}"`);
+      // log.info(`ipmi command for next cycle "${cycleCommands[index]}"`);
 
       await sleep(20000);
-      let a = command[0];
-      let b = command[1];
-      let c = command[2];
+      const a = command[0];
+      const b = command[1];
+      const c = command[2];
+      const d = command[3];
       // Run ipmi command
       runIpmiTool(a, b, c);
       await sleep(2000);
       log.info(`Run ipmi command ${command}`);
-      log.info(`IPMI command sent "${cycleCommands[index]}"`);
+      // log.info(`IPMI command sent "${cycleCommands[index]}"`);
       await sleep(10000);
       if (a == "0x3a") {
         isACCycled = true;
@@ -292,7 +300,7 @@ function array_move(arr, old_index, new_index) {
             isPoweredOff = true;
             log.info(`System powered off , ${isPoweredOff}`);
           } else {
-            log.info(`276 [INFO] System did not powered off. ${isPoweredOff}`);
+            log.info(`System did not powered off. ${isPoweredOff}`);
           }
 
           waitCount++;
@@ -318,16 +326,16 @@ function array_move(arr, old_index, new_index) {
             log.info(`OS Booted status ${osBooted}`);
           } else {
             osBooted = false;
-            log.info(`[INFO ] OS Booted status ${osBooted}`);
+            log.info(` OS Booted status ${osBooted}`);
           }
           waitCount++;
         }
       }
 
       log.info(
-        `Is BMC up? ${(await pingHost(bmcIp)) ? "YES" : "NO"} ipmi command ${
-          cycleCommands[index]
-        }`
+        `Is BMC up? ${
+          (await pingHost(bmcIp)) ? "YES" : "NO"
+        } ipmi command ${command}`
       );
       // Check ipmi power AC cycle command
       if (!(await pingHost(bmcIp))) {
