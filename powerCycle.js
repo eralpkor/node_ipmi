@@ -5,7 +5,9 @@ import https from "https";
 import { sleep, pingHost, timeStamp } from "./helper.js";
 import { execFile } from "node:child_process";
 import path from "node:path";
+// Change directory to your ipmitool directory
 const ipmi_path = path.dirname("C:\\node_ipmi\\ipmi\\ipmitool.exe");
+// Your log file directory
 const log_path = path.dirname("C:\\node_ipmi\\logs\\test");
 import file from "simple-node-logger";
 import setup from "./setup.js";

@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # IPMITOOL files
-ipmi/
+ipmitool/
 CheckLink.bat
 # Runtime data
 pids
